@@ -1,7 +1,6 @@
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS subdomains (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name STRING NOT NULL,
-    auth_token STRING,
+    subdomain STRING NOT NULL,
     created_at DATETIME,
     updated_at DATETIME
 )

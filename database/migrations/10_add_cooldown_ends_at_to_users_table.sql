@@ -1,1 +1,0 @@
-ALTER TABLE users ADD COLUMN cooldown_ends_at INTEGER DEFAULT NULL;

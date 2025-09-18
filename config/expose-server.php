@@ -1,4 +1,7 @@
 <?php
+
+$authToken = getenv('auth_token');
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -39,47 +42,7 @@ return [
     | admin interface.
     |
     */
-    'validate_auth_tokens' => false,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Maximum connection length
-    |--------------------------------------------------------------------------
-    |
-    | If you want to limit the amount of time that a single connection can
-    | stay connected to the expose server, you can specify the maximum
-    | connection length in minutes here. A maximum length of 0 means that
-    | clients can stay connected as long as they want.
-    |
-    */
-    'maximum_connection_length' => 0,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Connection Cooldown Period
-    |--------------------------------------------------------------------------
-    |
-    | After a client is disconnected due to reaching the maximum connection
-    | length, they must wait this many minutes before reconnecting.
-    | Set to 0 to disable the cooldown period.
-    |
-    */
-    'connection_cooldown_period' => 0,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Maximum number of open connections
-    |--------------------------------------------------------------------------
-    |
-    | You can limit the amount of connections that one client/user can have
-    | open. A maximum connection count of 0 means that clients can open
-    | as many connections as they want.
-    |
-    | When creating users with the API/admin interface, you can
-    | override this setting per user.
-    |
-    */
-    'maximum_open_connections_per_user' => 0,
+    'auth_token' => $authToken,
 
     /*
     |--------------------------------------------------------------------------
@@ -91,7 +54,7 @@ return [
     | request this subdomain for their own connection.
     |
     */
-    'subdomain' => 'expose',
+    'subdomain' => 'admin-tunnel',
 
     /*
     |--------------------------------------------------------------------------
@@ -147,24 +110,8 @@ return [
         |
         */
     'users' => [
-        'username' => 'secret',
+        'admin' => $authToken,
     ],
-
-    /*
-        |--------------------------------------------------------------------------
-        | User Repository
-        |--------------------------------------------------------------------------
-        |
-        | This is the user repository, which by default loads and saves all authorized
-        | users in a SQLite database. You can implement your own user repository
-        | if you want to store your users in a different store (Redis, MySQL, etc.)
-        |
-        */
-    'user_repository' => \Expose\Server\UserRepository\DatabaseUserRepository::class,
-
-    'subdomain_repository' => \Expose\Server\SubdomainRepository\DatabaseSubdomainRepository::class,
-
-    'logger_repository' => \Expose\Server\LoggerRepository\DatabaseLogger::class,
 
     /*
     |--------------------------------------------------------------------------
@@ -177,24 +124,11 @@ return [
     |
     */
     'messages' => [
-        'resolve_connection_message' => function ($connectionInfo, $user) {
-            return config('expose-server.messages.message_of_the_day');
-        },
-
         'message_of_the_day' => 'Thank you for using expose.',
 
         'invalid_auth_token' => 'Authentication failed. Please check your authentication token and try again.',
 
         'subdomain_taken' => 'The chosen subdomain :subdomain is already taken. Please choose a different subdomain.',
-
-        'subdomain_reserved' => 'The chosen subdomain :subdomain is not available. Please choose a different subdomain.',
-
-        'custom_subdomain_unauthorized' => 'You are not allowed to specify custom subdomains. Please upgrade to Expose Pro. Assigning a random subdomain instead.',
-
-        'custom_domain_unauthorized' => 'You are not allowed to use this custom domain. If you think this should work, double-check the server setting and try again.',
-
-        'maximum_connection_length_reached' => 'You have reached the maximum connection length for this server. Please upgrade to Expose Pro for unlimited connection length.',
-        'connection_cooldown_active' => 'You\'ve used your free session for now. Please wait :cooldown minutes before reconnecting, or upgrade to Expose Pro → https://expose.dev/pro',
     ],
 
     'statistics' => [

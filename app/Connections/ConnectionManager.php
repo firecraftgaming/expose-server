@@ -3,7 +3,6 @@
 namespace Expose\Server\Connections;
 
 use Expose\Server\Contracts\ConnectionManager as ConnectionManagerContract;
-use Expose\Server\Contracts\LoggerRepository;
 use Expose\Server\Contracts\StatisticsCollector;
 use Expose\Server\Contracts\SubdomainGenerator;
 use Expose\Server\Exceptions\NoFreePortAvailable;
@@ -29,36 +28,11 @@ class ConnectionManager implements ConnectionManagerContract
     /** @var StatisticsCollector */
     protected $statisticsCollector;
 
-    /** @var LoggerRepository */
-    protected $logger;
-
-    public function __construct(SubdomainGenerator $subdomainGenerator, StatisticsCollector $statisticsCollector, LoggerRepository $logger, LoopInterface $loop)
+    public function __construct(SubdomainGenerator $subdomainGenerator, StatisticsCollector $statisticsCollector, LoopInterface $loop)
     {
         $this->subdomainGenerator = $subdomainGenerator;
         $this->loop = $loop;
         $this->statisticsCollector = $statisticsCollector;
-        $this->logger = $logger;
-    }
-
-    public function limitConnectionLength(ControlConnection $connection, int $maximumConnectionLength)
-    {
-        if ($maximumConnectionLength === 0) {
-            return;
-        }
-
-        $connection->setMaximumConnectionLength($maximumConnectionLength);
-
-        $this->loop->addTimer($maximumConnectionLength * 60, function () use ($connection) {
-            $connection->closeWithoutReconnect();
-            
-            // Set cooldown for authenticated users
-            $cooldownPeriod = config('expose-server.connection_cooldown_period', 0);
-            if ($cooldownPeriod > 0 && !empty($connection->authToken)) {
-                $cooldownEndsAt = time() + ($cooldownPeriod * 60);
-                app(\Expose\Server\Contracts\UserRepository::class)->setCooldownForToken($connection->authToken, $cooldownEndsAt);
-                $this->statisticsCollector->cooldownTriggered();
-            }
-        });
     }
 
     public function storeConnection(string $host, ?string $subdomain, ?string $serverHost, ConnectionInterface $connection): ControlConnection
@@ -79,8 +53,6 @@ class ConnectionManager implements ConnectionManagerContract
         $this->connections[] = $storedConnection;
 
         $this->statisticsCollector->siteShared($this->getAuthTokenFromConnection($connection));
-
-        $this->logger->logSubdomain($storedConnection->authToken, $storedConnection->subdomain);
 
         $this->performConnectionCallback($storedConnection);
 

@@ -10,29 +10,6 @@
                 <h2 class="font-medium text-gray-800 dark:text-white text-base font-headline mb-4 mb-0 pl-2 !mb-0">
                     List
                 </h2>
-
-                <div class="flex items-center space-x-2 justify-end">
-                    <label for="showToken"
-                           class="text-gray-600 dark:text-gray-100 text-sm dark:text-gray-100">
-                        Show token
-                    </label>
-
-                    <div class="inline-flex items-center">
-                        <label class="flex items-center cursor-pointer relative">
-                            <input id="showToken"
-                                   v-model="showToken"
-                                   name="showToken"
-                                   value="1"
-                                   type="checkbox"
-                                   class="peer h-5 w-5 cursor-pointer transition-all appearance-none rounded border bg-white dark:bg-gray-700 shadow-sm border-gray-200 checked:border-transparent dark:border-gray-700 checked:bg-primary"
-                            />
-                            <span class="absolute text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                                                    @include('icons.checkmark')
-                                    </span>
-                        </label>
-                    </div>
-
-                </div>
             </div>
 
             <div class="rounded-lg bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-white/10 shadow-md !-mb-2">
@@ -47,14 +24,6 @@
                                 </th>
                                 <th class="p-4 text-left text-sm font-medium text-gray-500 dark:text-white">
                                     Subdomain
-                                </th>
-                                <th class="p-4 text-left text-sm font-medium text-gray-500 dark:text-white">
-                                    <span v-if="showToken">
-                                        Token
-                                    </span>
-                                    <span v-else>
-                                        User
-                                    </span>
                                 </th>
                                 <th class="p-4 text-sm font-medium text-gray-500 dark:text-white text-right">
                                     Shared At
@@ -71,14 +40,6 @@
                                 </td>
                                 <td class="px-4 py-3 font-mono text-gray-800 dark:text-gray-300">
                                     @{ site.subdomain }.{{ $configuration->hostname()}}:{{ $configuration->port() }}
-                                </td>
-                                <td class="px-4 py-3 text-gray-800 dark:text-gray-300">
-                                    <span v-if="showToken" class="font-mono">
-                                        @{ site.user?.auth_token }
-                                    </span>
-                                    <span v-else>
-                                        @{ site.user?.name }
-                                    </span>
                                 </td>
                                 <td class="px-4 py-3 text-gray-800 text-right dark:text-gray-300">
                                     @{ site.shared_at }
@@ -122,7 +83,6 @@
 
             data: {
                 sites: [],
-                showToken: false
             },
 
             methods: {

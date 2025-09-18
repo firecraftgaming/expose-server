@@ -43,12 +43,6 @@
                     </div>
                 </div>
                 <div class="flex space-x-4 items-center mt-4 md:mt-0">
-                    <a href="/users"
-                       class="leading-5 transition duration-150 ease-in-out"
-                       v-bind:class="{ 'text-primary font-bold': currentRequest === 'users', 'text-gray-800 dark:text-gray-200 dark:hover:text-gray-100 font-medium ': currentRequest !== 'users' }">
-                        Users
-                    </a>
-
                     <a href="/sites"
                        class="leading-5 transition duration-150 ease-in-out"
                        v-bind:class="{ 'text-primary font-bold': currentRequest === 'sites', 'text-gray-800 dark:text-gray-200 dark:hover:text-gray-100 font-medium ': currentRequest !== 'sites' }">
@@ -121,18 +115,6 @@
                 </div>
             </div>
 
-            <div class="rounded-md bg-gray-50 dark:bg-gray-900/50 text-gray-700 dark:text-gray-200 shadow">
-                <div class="gap-y-1.5 p-6 flex flex-row items-center justify-between space-y-0 pb-2">
-                    <h3 class="tracking-tight text-sm font-medium"> Total Users </h3>
-                    @include('icons.users')
-                </div>
-                <div class="p-6 pt-0">
-                    <div class="text-2xl text-gray-800 dark:text-gray-100 font-bold">
-                        @{ userCount }
-                    </div>
-                </div>
-            </div>
-
             <div class="flex justify-end items-end text-right text-xs text-gray-400">
 
                 Interval: @{ statisticsInterval } seconds,
@@ -165,7 +147,6 @@
         delimiters: ['@{', '}'],
 
         data: {
-            userCount: 0,
             siteCount: 0,
             statistics: {},
             serverKey: '',
@@ -178,7 +159,6 @@
                     .then((response) => {
                         return response.json();
                     }).then((data) => {
-                    this.userCount = data.userCount;
                     this.siteCount = data.siteCount;
                     this.statistics = data.statistics[0]
                     this.serverKey = data.serverKey;

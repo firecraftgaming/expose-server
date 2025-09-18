@@ -9,6 +9,6 @@ class RandomSubdomainGenerator implements SubdomainGenerator
 {
     public function generateSubdomain(): string
     {
-        return strtolower(Str::random(10));
+        return strtolower(Str::random(10)) . '-tunnel';
     }
 }

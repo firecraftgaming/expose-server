@@ -4,7 +4,6 @@ namespace Expose\Server\Http\Controllers\Admin;
 
 use Expose\Server\Contracts\ConnectionManager;
 use Expose\Server\Contracts\StatisticsRepository;
-use Expose\Server\Contracts\UserRepository;
 use Illuminate\Http\Request;
 use Ratchet\ConnectionInterface;
 use function React\Promise\all;
@@ -13,16 +12,13 @@ class GetDashboardStatsController extends AdminController
 {
     protected $keepConnectionOpen = true;
 
-    protected UserRepository $userRepository;
-
     protected ConnectionManager $connectionManager;
 
     protected StatisticsRepository $statisticsRepository;
 
-    public function __construct(ConnectionManager $connectionManager, UserRepository $userRepository, StatisticsRepository $statisticsRepository)
+    public function __construct(ConnectionManager $connectionManager, StatisticsRepository $statisticsRepository)
     {
         $this->connectionManager = $connectionManager;
-        $this->userRepository = $userRepository;
         $this->statisticsRepository = $statisticsRepository;
     }
 
@@ -31,7 +27,6 @@ class GetDashboardStatsController extends AdminController
 
         all([
             'serverKey'=> config('expose-server.subdomain'),
-            'userCount' => $this->userRepository->userCount(),
             'siteCount' => \React\Promise\resolve(count($this->connectionManager->getConnections())),
             'statistics' => $this->statisticsRepository->getStatistics(today()->subWeek()->toDateString(), today()->toDateString()),
             'statisticsInterval' => config('expose-server.statistics.interval_in_seconds')

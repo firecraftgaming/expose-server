@@ -12,8 +12,6 @@ interface ConnectionManager
 
     public function storeTcpConnection(int $port, ConnectionInterface $connection): ControlConnection;
 
-    public function limitConnectionLength(ControlConnection $connection, int $maximumConnectionLength);
-
     public function storeHttpConnection(ConnectionInterface $httpConnection, $requestId): HttpConnection;
 
     public function getHttpConnectionForRequestId(string $requestId): ?HttpConnection;

@@ -94,36 +94,6 @@
                     </h2>
                 </div>
                 <div class="pl-2 pt-0 space-y-6">
-                    <div class="flex items-start space-x-4">
-                        <div>
-                            <label for="authentication"
-                                   class="font-medium text-gray-800 dark:text-gray-100 text-sm font-medium dark:text-gray-100 mb-1">
-                                Require authentication tokens
-                            </label>
-                            <div class="mt-1">
-                                <div class="inline-flex items-center">
-                                    <label class="flex items-center cursor-pointer relative">
-                                        <input id="authentication"
-                                               v-model="configuration.validate_auth_tokens"
-                                               name="authentication"
-                                               value="1"
-                                               type="checkbox"
-                                               class="peer h-5 w-5 cursor-pointer transition-all appearance-none rounded border bg-white shadow-sm border-gray-200 checked:border-transparent dark:border-gray-700 checked:bg-primary"
-                                        />
-                                        <span class="absolute text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                                                    @include('icons.checkmark')
-                                    </span>
-                                    </label>
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-200">
-                                    Only allow connection from clients with
-                                    valid authentication tokens
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-
                     <div>
                         <label for="maximum_connection_length"
                                class="font-medium text-gray-800 dark:text-gray-100 text-sm font-medium dark:text-gray-100 mb-1">
