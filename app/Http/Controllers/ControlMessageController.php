@@ -258,18 +258,21 @@ class ControlMessageController implements MessageComponentInterface
 
     protected function verifyAuthToken(ConnectionInterface $connection): PromiseInterface
     {
-        $serverToken = config('expose-server.auth_token', '');
-        if ($serverToken === '') {
+        $serverTokens = config('expose-server.auth_token', '');
+        $allowedTokens = array_filter(array_map('trim', explode(',', $serverTokens)));
+        if (empty($allowedTokens)) {
             return \React\Promise\resolve(null);
         }
 
         $authToken = QueryParameters::create($connection->httpRequest)->get('authToken');
-        if ($serverToken === $authToken) {
+        if (in_array($authToken, $allowedTokens, true)) {
             return \React\Promise\resolve(null);
         }
 
         return \React\Promise\reject(new \Exception('Failed authentication'));
     }
+
+
     protected function canShareTcpPorts(ConnectionInterface $connection, $data)
     {
         if (! config('expose-server.allow_tcp_port_sharing', false)) {
