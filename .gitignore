@@ -11,3 +11,8 @@ database/expose.db
 .expose-server.php
 .env
 /storage/*
+
+# client
+client/node_modules
+client/dist
+client/yarn-error.log
