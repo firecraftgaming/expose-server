@@ -20,6 +20,7 @@ export function connect(config: Config): void {
   let attempt = 0;
   let noReconnect = false;
   let bannered = false;
+  let activeSub = '';
   const spinner = ora(`Connecting to ${config.server}…`).start();
 
   function tryConnect() {
@@ -46,6 +47,7 @@ export function connect(config: Config): void {
         const subdomain = data.subdomain as string;
         const serverHost = data.server_host as string;
         const clientId = data.client_id as string;
+        activeSub = subdomain;
         const motd = data.message as string | undefined;
         const scheme = config.tls ? 'https' : 'http';
         const publicDomain = config.domain ?? serverHost;
@@ -86,7 +88,7 @@ export function connect(config: Config): void {
         process.exit(1);
 
       } else if (event === 'createProxy') {
-        handleCreateProxy(data as { request_id: string; client_id: string }, config);
+        handleCreateProxy(data as { request_id: string; client_id: string }, config, activeSub);
 
       } else if (event === 'closeWithoutReconnect') {
         noReconnect = true;

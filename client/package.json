@@ -7,7 +7,7 @@
     "expose": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r src/dashboard/public dist/dashboard/public",
     "dev": "tsx src/cli.ts",
     "clean": "rm -rf dist"
   },

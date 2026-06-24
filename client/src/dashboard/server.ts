@@ -1,8 +1,14 @@
 import express from 'express';
 import http from 'http';
 import net from 'net';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { logStore, type LogEntry } from '../LogStore.js';
+import { logStore, type ExposeLog } from '../LogStore.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const publicDir = join(__dirname, 'public');
 
 export interface TunnelInfo {
   localHost: string;
@@ -32,6 +38,20 @@ function listenOnFreePort(server: http.Server, start: number): Promise<number> {
   });
 }
 
+function serveIndex(tunnel: TunnelInfo): string {
+  const html = readFileSync(join(publicDir, 'index.html'), 'utf8');
+  const pageData = JSON.stringify({
+    subdomains: [tunnel.publicUrl],
+    user: { can_specify_subdomains: 1 },
+    max_logs: 1000,
+    local_url: `http://${tunnel.localHost}:${tunnel.localPort}`,
+  });
+  return html.replace(
+    '<div id="internalDashboard"></div>',
+    `<div id="internalDashboard" data-page='${pageData.replace(/'/g, '&#39;')}'></div>`,
+  );
+}
+
 let dashboardPort: number | null = null;
 
 export async function startDashboard(preferredPort: number, tunnel: TunnelInfo): Promise<number> {
@@ -39,6 +59,12 @@ export async function startDashboard(preferredPort: number, tunnel: TunnelInfo):
 
   const app = express();
   app.use(express.json());
+
+  // Inject pageData into the SPA entry point
+  app.get('/', (_req, res) => res.type('html').send(serveIndex(tunnel)));
+
+  // Static assets (JS, CSS, fonts, favicons)
+  app.use(express.static(publicDir));
 
   app.get('/api/tunnels', (_req, res) => {
     res.json([tunnel]);
@@ -49,31 +75,31 @@ export async function startDashboard(preferredPort: number, tunnel: TunnelInfo):
   });
 
   app.get('/api/log/:id', (req, res) => {
-    const entry = logStore.get(req.params.id!);
-    if (!entry) return res.status(404).json({ error: 'not found' });
-    res.json({
-      ...entry,
-      requestBytes: entry.requestBytes.toString('base64'),
-      responseBytes: entry.responseBytes.toString('base64'),
-    });
+    const log = logStore.get(req.params.id!);
+    if (!log) return res.status(404).json({ error: 'not found' });
+    res.json(log);
+  });
+
+  app.post('/api/logs/search', (req, res) => {
+    const term: string = (req.body as { search_term?: string }).search_term ?? '';
+    res.json(logStore.search(term));
   });
 
   app.post('/api/replay/:id', (req, res) => {
-    const entry = logStore.get(req.params.id!);
-    if (!entry) return res.status(404).json({ error: 'not found' });
+    const log = logStore.get(req.params.id!);
+    if (!log) return res.status(404).json({ error: 'not found' });
 
     const startedAt = Date.now();
     const resChunks: Buffer[] = [];
+    const reqBuf = Buffer.from(log.request.raw, 'utf8');
 
     const sock = net.createConnection({ host: tunnel.localHost, port: tunnel.localPort });
     sock.setTimeout(10_000);
     sock.on('data', chunk => resChunks.push(chunk));
-    // half-close after writing so keep-alive servers see EOF and close their end
-    sock.end(entry.requestBytes);
+    sock.end(reqBuf);
     sock.on('close', () => {
       if (!res.headersSent) {
-        const responseBytes = Buffer.concat(resChunks);
-        const replayed = logStore.add(entry.requestBytes, responseBytes, startedAt);
+        const replayed = logStore.add(reqBuf, Buffer.concat(resChunks), startedAt, log.subdomain, tunnel.localPort);
         res.json({ id: replayed.id });
       }
     });
@@ -95,19 +121,20 @@ export async function startDashboard(preferredPort: number, tunnel: TunnelInfo):
     ws.on('close', () => clients.delete(ws));
   });
 
-  const push = (event: string, data: unknown) => {
-    const msg = JSON.stringify({ event, data });
+  const pushListEntry = (log: ExposeLog) => {
+    const msg = JSON.stringify(logStore.toListEntry(log));
     for (const ws of clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
     }
   };
 
-  logStore.on('log', (entry: LogEntry) => push('log', {
-    ...entry,
-    requestBytes: entry.requestBytes.toString('base64'),
-    responseBytes: entry.responseBytes.toString('base64'),
-  }));
-  logStore.on('clear', () => push('clear', null));
+  logStore.on('log', pushListEntry);
+  logStore.on('clear', () => {
+    const msg = JSON.stringify({ clear: true });
+    for (const ws of clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  });
 
   dashboardPort = await listenOnFreePort(server, preferredPort);
   return dashboardPort;

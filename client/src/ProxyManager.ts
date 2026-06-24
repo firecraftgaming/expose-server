@@ -8,11 +8,30 @@ interface ProxyRequest {
   client_id: string;
 }
 
-export function handleCreateProxy(data: ProxyRequest, config: Config): void {
+const HTTP_METHOD_PREFIXES = ['GET ', 'POST ', 'PUT ', 'PATCH ', 'DELETE ', 'HEAD ', 'OPTIONS ', 'CONNECT '];
+
+function isNewHttpRequest(chunk: Buffer): boolean {
+  const preview = chunk.slice(0, 9).toString('ascii');
+  return HTTP_METHOD_PREFIXES.some(m => preview.startsWith(m));
+}
+
+// Force the local server to close after one response so we get clean timing.
+function forceConnectionClose(requestBytes: Buffer): Buffer {
+  const raw = requestBytes.toString('utf8');
+  const sep = raw.indexOf('\r\n\r\n');
+  if (sep === -1) return requestBytes;
+  const headerBlock = raw.slice(0, sep);
+  const body = raw.slice(sep);
+  const lines = headerBlock.split('\r\n').filter(l => !/^connection\s*:/i.test(l));
+  lines.push('Connection: close');
+  return Buffer.from(lines.join('\r\n') + body, 'utf8');
+}
+
+export function handleCreateProxy(data: ProxyRequest, config: Config, subdomain: string): void {
   const ws = new WebSocket(controlUrl(config), { headers: CONTROL_HEADERS });
 
-  const reqChunks: Buffer[] = [];
-  const resChunks: Buffer[] = [];
+  let reqChunks: Buffer[] = [];
+  let resChunks: Buffer[] = [];
   let localSock: net.Socket | null = null;
   let startedAt = 0;
   let logged = false;
@@ -20,13 +39,40 @@ export function handleCreateProxy(data: ProxyRequest, config: Config): void {
   const finalize = () => {
     if (logged || !startedAt) return;
     logged = true;
-    logStore.add(Buffer.concat(reqChunks), Buffer.concat(resChunks), startedAt);
+    logStore.add(Buffer.concat(reqChunks), Buffer.concat(resChunks), startedAt, subdomain, config.localPort);
+  };
+
+  const teardownSock = (sock: net.Socket) => {
+    if (sock !== localSock) return;
+    finalize();
+    localSock = null;
+    sock.destroy();
+    if (ws.readyState === WebSocket.OPEN) ws.close();
   };
 
   const teardown = () => {
     finalize();
     localSock?.destroy();
-    if (ws.readyState === WebSocket.OPEN) ws.close();
+    localSock = null;
+  };
+
+  const openLocalSock = (firstChunk: Buffer) => {
+    reqChunks = [firstChunk];
+    resChunks = [];
+    logged = false;
+    startedAt = Date.now();
+
+    const sock = net.createConnection({ host: config.localHost, port: config.localPort });
+    localSock = sock;
+
+    sock.on('data', responseChunk => {
+      resChunks.push(responseChunk);
+      if (ws.readyState === WebSocket.OPEN) ws.send(responseChunk);
+    });
+    sock.on('end', () => teardownSock(sock));
+    sock.on('close', () => teardownSock(sock));
+    sock.on('error', () => teardownSock(sock));
+    sock.write(forceConnectionClose(firstChunk));
   };
 
   ws.once('open', () => {
@@ -35,23 +81,21 @@ export function handleCreateProxy(data: ProxyRequest, config: Config): void {
 
   ws.on('message', (raw, isBinary) => {
     if (!isBinary) return;
-    const chunk = raw instanceof Buffer ? raw : Buffer.from(raw as ArrayBuffer);
+    const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+
+    // Pipelined request on same proxy WS: finalize current entry, start fresh.
+    if (localSock && isNewHttpRequest(chunk)) {
+      finalize();
+      reqChunks = [chunk];
+      resChunks = [];
+      logged = false;
+      startedAt = Date.now();
+      localSock.write(forceConnectionClose(chunk));
+      return;
+    }
 
     if (!localSock) {
-      startedAt = Date.now();
-      reqChunks.push(chunk);
-
-      localSock = net.createConnection({ host: config.localHost, port: config.localPort });
-
-      localSock.on('data', responseChunk => {
-        resChunks.push(responseChunk);
-        if (ws.readyState === WebSocket.OPEN) ws.send(responseChunk);
-      });
-
-      localSock.on('end', () => teardown());
-      localSock.on('close', () => teardown());
-      localSock.on('error', () => teardown());
-      localSock.write(chunk);
+      openLocalSock(chunk);
     } else {
       reqChunks.push(chunk);
       localSock.write(chunk);
@@ -59,5 +103,8 @@ export function handleCreateProxy(data: ProxyRequest, config: Config): void {
   });
 
   ws.on('close', () => teardown());
-  ws.on('error', () => teardown());
+  ws.on('error', () => {
+    teardown();
+    if (ws.readyState === WebSocket.OPEN) ws.close();
+  });
 }
