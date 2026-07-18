@@ -16,3 +16,5 @@ database/expose.db
 client/node_modules
 client/dist
 client/yarn-error.log
+client/dashboard/node_modules
+client/src/dashboard/public
