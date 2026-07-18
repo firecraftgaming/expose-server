@@ -1,16 +1,23 @@
 {
-  "name": "expose-client",
+  "name": "@418teapot.io/expose",
   "version": "0.1.0",
   "description": "CLI client for the Expose tunneling server",
   "type": "module",
   "bin": {
-    "expose": "./dist/cli.js"
+    "expose": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "npm run build:dashboard && tsc && rm -rf dist/dashboard/public && cp -r src/dashboard/public dist/dashboard/public",
     "build:dashboard": "cd dashboard && (test -d node_modules || npm ci) && npm run build",
     "dev": "npm run build:dashboard && tsx src/cli.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "engines": {
     "node": ">=20"
