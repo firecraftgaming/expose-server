@@ -17,18 +17,63 @@ export interface ParsedResponse {
   reason: string;
   headers: Record<string, string>;
   body: string;
+  raw: string;
 }
 
-function splitHeaders(raw: string): { headers: Record<string, string>; body: string } {
-  const sep = raw.indexOf('\r\n\r\n');
-  const headerBlock = sep === -1 ? raw : raw.slice(0, sep);
-  const body = sep === -1 ? '' : raw.slice(sep + 4);
+// Split at the Buffer level so binary/compressed body bytes can't corrupt the header block.
+function splitMessage(buf: Buffer): { headerStr: string; bodyBuf: Buffer } {
+  const sep = buf.indexOf('\r\n\r\n');
+  const headerStr = (sep === -1 ? buf : buf.slice(0, sep)).toString('utf8');
+  const bodyBuf = sep === -1 ? Buffer.alloc(0) : buf.slice(sep + 4);
+  return { headerStr, bodyBuf };
+}
+
+function parseHeaders(headerStr: string): Record<string, string> {
   const headers: Record<string, string> = {};
-  for (const line of headerBlock.split('\r\n').slice(1)) {
+  for (const line of headerStr.split('\r\n').slice(1)) {
     const colon = line.indexOf(':');
     if (colon > 0) headers[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
   }
-  return { headers, body };
+  return headers;
+}
+
+function getHeader(headers: Record<string, string>, name: string): string {
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === name) return v;
+  }
+  return '';
+}
+
+function dechunk(buf: Buffer): Buffer {
+  const chunks: Buffer[] = [];
+  let pos = 0;
+  while (pos < buf.length) {
+    const lineEnd = buf.indexOf('\r\n', pos);
+    if (lineEnd === -1) break;
+    const size = parseInt(buf.slice(pos, lineEnd).toString('ascii').split(';')[0]!.trim(), 16);
+    if (!Number.isFinite(size) || size < 0) break;
+    if (size === 0) break;
+    const start = lineEnd + 2;
+    chunks.push(buf.slice(start, Math.min(start + size, buf.length)));
+    pos = start + size + 2;
+  }
+  return chunks.length ? Buffer.concat(chunks) : buf;
+}
+
+// Undo transfer-encoding (chunked framing) first, then content-encoding (compression).
+function decodeBody(bodyBuf: Buffer, headers: Record<string, string>): string {
+  if (getHeader(headers, 'transfer-encoding').toLowerCase().includes('chunked')) {
+    bodyBuf = dechunk(bodyBuf);
+  }
+  const encoding = getHeader(headers, 'content-encoding').toLowerCase();
+  try {
+    if (encoding.includes('br')) return zlib.brotliDecompressSync(bodyBuf).toString('utf8');
+    if (encoding.includes('gzip')) return zlib.gunzipSync(bodyBuf).toString('utf8');
+    if (encoding.includes('deflate')) return zlib.inflateSync(bodyBuf).toString('utf8');
+  } catch {
+    // fall through to raw
+  }
+  return bodyBuf.toString('utf8');
 }
 
 function parseQuery(uri: string): { name: string; value: string }[] {
@@ -60,11 +105,11 @@ function buildCurl(method: string, uri: string, headers: Record<string, string>,
 }
 
 export function parseRequest(buf: Buffer, localPort: number): ParsedRequest {
-  const raw = buf.toString('utf8');
-  const firstLine = raw.slice(0, raw.indexOf('\r\n'));
+  const { headerStr, bodyBuf } = splitMessage(buf);
+  const firstLine = headerStr.slice(0, headerStr.indexOf('\r\n'));
   const [method = 'GET', uri = '/', httpVersion = 'HTTP/1.1'] = firstLine.split(' ');
-  const { headers, body } = splitHeaders(raw);
-  const contentType = headers['Content-Type'] ?? headers['content-type'] ?? '';
+  const headers = parseHeaders(headerStr);
+  const body = decodeBody(bodyBuf, headers);
   return {
     method: method!,
     uri: uri!,
@@ -72,19 +117,14 @@ export function parseRequest(buf: Buffer, localPort: number): ParsedRequest {
     headers,
     body,
     query: parseQuery(uri!),
-    post: parsePost(body, contentType),
-    raw,
+    post: parsePost(body, getHeader(headers, 'content-type')),
+    raw: buf.toString('utf8'),
     curl: buildCurl(method!, uri!, headers, body, localPort),
   };
 }
 
 export function parseResponse(buf: Buffer): ParsedResponse {
-  // Use Buffer-level search so compressed body bytes can't corrupt the header split.
-  const sep = buf.indexOf('\r\n\r\n');
-  const headerBuf = sep === -1 ? buf : buf.slice(0, sep);
-  const bodyBuf = sep === -1 ? Buffer.alloc(0) : buf.slice(sep + 4);
-
-  const headerStr = headerBuf.toString('utf8');
+  const { headerStr, bodyBuf } = splitMessage(buf);
   const firstLine = headerStr.slice(0, headerStr.indexOf('\r\n'));
   const spaceIdx = firstLine.indexOf(' ');
   const rest = firstLine.slice(spaceIdx + 1);
@@ -92,27 +132,6 @@ export function parseResponse(buf: Buffer): ParsedResponse {
   const status = parseInt(rest.slice(0, space2 === -1 ? undefined : space2), 10) || 0;
   const reason = space2 === -1 ? '' : rest.slice(space2 + 1);
 
-  const headers: Record<string, string> = {};
-  for (const line of headerStr.split('\r\n').slice(1)) {
-    const colon = line.indexOf(':');
-    if (colon > 0) headers[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
-  }
-
-  const encoding = (headers['Content-Encoding'] ?? headers['content-encoding'] ?? '').toLowerCase();
-  let body = '';
-  try {
-    if (encoding.includes('br')) {
-      body = zlib.brotliDecompressSync(bodyBuf).toString('utf8');
-    } else if (encoding.includes('gzip')) {
-      body = zlib.gunzipSync(bodyBuf).toString('utf8');
-    } else if (encoding.includes('deflate')) {
-      body = zlib.inflateSync(bodyBuf).toString('utf8');
-    } else {
-      body = bodyBuf.toString('utf8');
-    }
-  } catch {
-    body = bodyBuf.toString('utf8');
-  }
-
-  return { status, reason, headers, body };
+  const headers = parseHeaders(headerStr);
+  return { status, reason, headers, body: decodeBody(bodyBuf, headers), raw: buf.toString('utf8') };
 }
