@@ -94,7 +94,11 @@ function parsePost(body: string, contentType: string): { name: string; value: st
 }
 
 function buildCurl(method: string, uri: string, headers: Record<string, string>, body: string, localPort: number): string {
-  const url = `http://localhost:${localPort}${uri}`;
+  const forwardedHost = getHeader(headers, 'x-forwarded-host') || getHeader(headers, 'x-original-host');
+  const forwardedProto = getHeader(headers, 'x-forwarded-proto') || 'https';
+  const url = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}${uri}`
+    : `http://localhost:${localPort}${uri}`;
   const parts = [`curl -X ${method} "${url}"`];
   for (const [k, v] of Object.entries(headers)) {
     if (k.toLowerCase() === 'host') continue;
