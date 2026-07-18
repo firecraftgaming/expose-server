@@ -11,7 +11,7 @@ import "vue3-json-viewer/dist/index.css";
 import {bodyIsJson, copyToClipboard, bodyIsHtml, toJson} from '@/lib/utils'
 import {useLocalStorage} from '@/lib/composables/useLocalStorage'
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
-import {ArrowsRightLeftIcon, DocumentTextIcon} from "@heroicons/vue/16/solid";
+import {ArrowsRightLeftIcon, CommandLineIcon, DocumentTextIcon} from "@heroicons/vue/16/solid";
 import IconCopyButton from "@/components/ui/IconCopyButton.vue";
 import AccordionTableHeader from "@/components/ui/table/AccordionTableHeader.vue";
 import BodyViewButton from "@/components/ui/BodyViewButton.vue";
@@ -26,8 +26,9 @@ const props = defineProps<{
 const responseHeadersVisible = useLocalStorage<boolean>('responseHeadersVisible', true)
 const accordionState = ref('responseHeaderOpen' as string);
 const bodyAccordionState = ref('bodyOpen' as string);
+const streamAccordionState = ref('streamOpen' as string);
 
-const bodyView = ref('raw' as 'json' | 'raw' | 'preview' | 'stream')
+const bodyView = ref('raw' as 'json' | 'raw' | 'preview')
 
 const rowAccordion = reactive({} as Record<string, boolean>)
 
@@ -168,8 +169,6 @@ onUnmounted(() => {
                                             value="json" v-if="bodyIsJson(response)"/>
                             <BodyViewButton @click="bodyView = $event" :active="bodyView === 'preview'" label="Preview"
                                             value="preview"/>
-                            <BodyViewButton @click="bodyView = $event" :active="bodyView === 'stream'" label="Stream"
-                                            value="stream" v-if="response.raw"/>
                         </div>
 
                         <JsonViewer v-if="bodyView === 'json'" :expand-depth="2"
@@ -177,9 +176,6 @@ onUnmounted(() => {
                                     :class="{ 'jv-light': mode === 'light', 'jv-dark': mode === 'dark' }"/>
                         <pre v-if="bodyView === 'raw'"
                              class="p-6 text-pretty break-all whitespace-pre-wrap">{{ response.body ?? '' }}
-</pre>
-                        <pre v-if="bodyView === 'stream'"
-                             class="p-6 text-pretty break-all whitespace-pre-wrap">{{ response.raw ?? '' }}
 </pre>
 
                         <div v-if="bodyView === 'preview'"
@@ -189,6 +185,30 @@ onUnmounted(() => {
                         </div>
                     </div>
 
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
+
+        <Accordion type="single" collapsible v-model="streamAccordionState"
+                   v-if="response.raw">
+            <AccordionItem value="streamOpen">
+                <AccordionTrigger>
+
+                    <div>Stream</div>
+                    <template v-slot:action>
+                        <IconCopyButton @click="copyToClipboard(response.raw ?? '')">
+                            Copy
+                        </IconCopyButton>
+                    </template>
+                    <template v-slot:icon>
+                        <CommandLineIcon class="size-4"/>
+                    </template>
+                </AccordionTrigger>
+                <AccordionContent class="px-2">
+                    <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-white/10 dark:border-[#606062]">
+                        <pre class="p-6 text-pretty break-all whitespace-pre-wrap">{{ response.raw ?? '' }}
+</pre>
+                    </div>
                 </AccordionContent>
             </AccordionItem>
         </Accordion>
