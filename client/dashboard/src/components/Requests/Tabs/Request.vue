@@ -38,7 +38,7 @@ const postParametersAccordionState = ref('postParametersOpen' as string);
 const bodyAccordionState = ref('bodyOpen' as string);
 const pluginAccordionState = ref('pluginOpen' as string);
 
-const bodyView = ref('json' as 'json' | 'raw')
+const bodyView = ref('json' as 'json' | 'raw' | 'stream')
 
 const rowAccordion = reactive({} as Record<string, boolean>)
 
@@ -65,13 +65,15 @@ watch(() => props.request, async () => {
 
     if (bodyIsJson(props.request)) {
         bodyView.value = 'json';
+    } else if (!props.request.body && props.request.raw) {
+        bodyView.value = 'stream';
     } else {
         bodyView.value = 'raw';
     }
 
 
     await checkTruncatedRows();
-});
+}, {immediate: true});
 
 watch(accordionState, (value) => {
     if (value === 'requestHeaderOpen') {
@@ -302,7 +304,7 @@ onUnmounted(() => {
         </Accordion>
 
         <Accordion type="single" collapsible v-model="bodyAccordionState"
-                   v-if="request.body">
+                   v-if="request.body || request.raw">
             <AccordionItem value="bodyOpen">
                 <AccordionTrigger>
 
@@ -317,7 +319,7 @@ onUnmounted(() => {
                     </template>
                 </AccordionTrigger>
                 <AccordionContent class="px-2">
-                    <div v-if="request.body === ''">
+                    <div v-if="!request.body && !request.raw">
                         <span class="text-sm opacity-75 font-mono pt-2 inline-block px-2">Request body is empty.</span>
                     </div>
 
@@ -325,15 +327,20 @@ onUnmounted(() => {
 
                         <div class="flex items-center space-x-2 px-4 pt-4 mb-4">
                             <BodyViewButton @click="bodyView = $event" :active="bodyView === 'raw'" label="Raw"
-                                            value="raw"/>
+                                            value="raw" v-if="request.body"/>
                             <BodyViewButton @click="bodyView = $event" :active="bodyView === 'json'" label="JSON"
                                             value="json" v-if="bodyIsJson(request)"/>
+                            <BodyViewButton @click="bodyView = $event" :active="bodyView === 'stream'" label="Stream"
+                                            value="stream" v-if="request.raw"/>
                         </div>
 
                         <JsonViewer v-if="bodyView === 'json'" :expand-depth="2" :value="JSON.parse(request.body ?? '')"
                                     :class="{ 'jv-light': mode === 'light', 'jv-dark': mode === 'dark' }"/>
                         <pre v-if="bodyView === 'raw'"
                              class="p-6 prettyprint break-all whitespace-pre-wrap">{{ request.body ?? '' }}
+            </pre>
+                        <pre v-if="bodyView === 'stream'"
+                             class="p-6 prettyprint break-all whitespace-pre-wrap">{{ request.raw ?? '' }}
             </pre>
                     </div>
 
