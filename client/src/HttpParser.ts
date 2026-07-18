@@ -93,6 +93,17 @@ function parsePost(body: string, contentType: string): { name: string; value: st
   });
 }
 
+const SKIP_CURL_HEADERS = new Set([
+  'host',
+  'via',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-expose-request-id',
+  'x-exposed-by',
+  'x-original-host',
+]);
+
 function buildCurl(method: string, uri: string, headers: Record<string, string>, body: string, localPort: number): string {
   const forwardedHost = getHeader(headers, 'x-forwarded-host') || getHeader(headers, 'x-original-host');
   const forwardedProto = getHeader(headers, 'x-forwarded-proto') || 'https';
@@ -101,7 +112,7 @@ function buildCurl(method: string, uri: string, headers: Record<string, string>,
     : `http://localhost:${localPort}${uri}`;
   const parts = [`curl -X ${method} "${url}"`];
   for (const [k, v] of Object.entries(headers)) {
-    if (k.toLowerCase() === 'host') continue;
+    if (SKIP_CURL_HEADERS.has(k.toLowerCase())) continue;
     parts.push(`-H "${k}: ${v.replace(/"/g, '\\"')}"`);
   }
   if (body) parts.push(`-d '${body.replace(/'/g, "\\'")}'`);
