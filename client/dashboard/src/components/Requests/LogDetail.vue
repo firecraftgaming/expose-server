@@ -49,14 +49,22 @@ const activeTab = ref('request' as 'request' | 'response')
                                     </Tooltip>
                                 </TooltipProvider>
 
-                                <ResponseBadge v-if="log.response" :status-code="log.response.status"
+                                <ResponseBadge v-if="log.response"
+                                               :status-code="log.complete === false && !log.response.status ? null : log.response.status"
                                                :reason="log.response.reason" class="mb-1 lg:mb-0 mt-px"/>
+
+                                <span v-if="log.complete === false"
+                                      class="inline-flex items-center gap-1.5 text-primary font-medium text-sm mb-1 lg:mb-0 mt-px">
+                                    <span class="size-2 rounded-full bg-primary animate-pulse"></span>
+                                    LIVE
+                                </span>
                             </div>
 
                             <div class="text-gray-500 dark:text-gray-300 font-normal text-sm flex flex-col lg:flex-row lg:items-center lg:space-x-2 mt-3">
                                 <div>Received on {{ log.performed_at }}</div>
                                 <div class="hidden lg:block">·</div>
-                                <div>Took {{ log.duration }}ms to resolve</div>
+                                <div v-if="log.complete === false">In progress — {{ log.duration }}ms elapsed</div>
+                                <div v-else>Took {{ log.duration }}ms to resolve</div>
                             </div>
                         </div>
 

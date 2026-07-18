@@ -30,16 +30,13 @@ function forceConnectionClose(requestBytes: Buffer): Buffer {
 export function handleCreateProxy(data: ProxyRequest, config: Config, subdomain: string): void {
   const ws = new WebSocket(controlUrl(config), { headers: CONTROL_HEADERS });
 
-  let reqChunks: Buffer[] = [];
-  let resChunks: Buffer[] = [];
   let localSock: net.Socket | null = null;
-  let startedAt = 0;
-  let logged = false;
+  let liveId: string | null = null;
 
   const finalize = () => {
-    if (logged || !startedAt) return;
-    logged = true;
-    logStore.add(Buffer.concat(reqChunks), Buffer.concat(resChunks), startedAt, subdomain, config.localPort);
+    if (!liveId) return;
+    logStore.finish(liveId);
+    liveId = null;
   };
 
   const teardownSock = (sock: net.Socket) => {
@@ -56,18 +53,20 @@ export function handleCreateProxy(data: ProxyRequest, config: Config, subdomain:
     localSock = null;
   };
 
+  // Register the request as in-flight so the dashboard shows it before the response completes.
+  const startRequest = (firstChunk: Buffer) => {
+    liveId = logStore.start(firstChunk, Date.now(), subdomain, config.localPort);
+  };
+
   const openLocalSock = (firstChunk: Buffer) => {
-    reqChunks = [firstChunk];
-    resChunks = [];
-    logged = false;
-    startedAt = Date.now();
+    startRequest(firstChunk);
 
     const sock = net.createConnection({ host: config.localHost, port: config.localPort });
     localSock = sock;
 
     sock.on('data', responseChunk => {
-      resChunks.push(responseChunk);
       if (ws.readyState === WebSocket.OPEN) ws.send(responseChunk);
+      if (liveId) logStore.appendResponse(liveId, responseChunk);
     });
     sock.on('end', () => teardownSock(sock));
     sock.on('close', () => teardownSock(sock));
@@ -86,10 +85,7 @@ export function handleCreateProxy(data: ProxyRequest, config: Config, subdomain:
     // Pipelined request on same proxy WS: finalize current entry, start fresh.
     if (localSock && isNewHttpRequest(chunk)) {
       finalize();
-      reqChunks = [chunk];
-      resChunks = [];
-      logged = false;
-      startedAt = Date.now();
+      startRequest(chunk);
       localSock.write(forceConnectionClose(chunk));
       return;
     }
@@ -97,7 +93,7 @@ export function handleCreateProxy(data: ProxyRequest, config: Config, subdomain:
     if (!localSock) {
       openLocalSock(chunk);
     } else {
-      reqChunks.push(chunk);
+      if (liveId) logStore.appendRequest(liveId, chunk);
       localSock.write(chunk);
     }
   });

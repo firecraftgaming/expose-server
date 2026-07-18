@@ -87,19 +87,42 @@ const connect = () => {
     let conn = new ReconnectingWebSocket(`ws://${window.location.hostname}:${window.location.port}/socket`);
 
     conn.onmessage = (e) => {
-        const request = JSON.parse(e.data);
-        const index = logs.value.findIndex(log => log.id === request.id);
-        if (index > -1) {
-            logs.value[index] = request;
-        } else {
-            logs.value.unshift(request);
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === 'clear') {
+            filteredLogs.value = logs.value = [];
+            emit('set-log', null);
+            return;
         }
 
-        logs.value = logs.value.splice(0, props.maxLogs);
+        // Live body/header updates for an in-flight request: refresh the detail
+        // pane in place if it's the one currently open.
+        if (msg.type === 'detail') {
+            if (props.currentLog?.id === msg.log.id) {
+                emit('set-log', msg.log);
+            }
+            return;
+        }
 
-        filteredLogs.value = logs.value;
+        // List-row upsert (fires on request start and completion).
+        if (msg.type !== 'list') return;
 
-        if (highlightNextLog.value || followRequests.value) {
+        const entry = msg.entry;
+        const index = logs.value.findIndex(log => log.id === entry.id);
+        if (index > -1) {
+            logs.value[index] = entry;
+        } else {
+            logs.value.unshift(entry);
+        }
+
+        logs.value = logs.value.slice(0, props.maxLogs);
+
+        // Don't clobber an active search filter with the full list.
+        if (!search.value) {
+            filteredLogs.value = logs.value;
+        }
+
+        if (index === -1 && (highlightNextLog.value || followRequests.value)) {
             loadLog(logs.value[0].id);
 
             highlightNextLog.value = false;
@@ -278,7 +301,12 @@ defineExpose({replay, nextLog, previousLog, focusSearch, clearLogs, toggleFollow
                         </TooltipProvider>
                     </TableCell>
                     <TableCell class=" text-right text-gray-500 dark:text-gray-300 pl-0 pr-4">
-                        {{ request.duration?.toFixed(0) }}ms
+                        <span v-if="request.complete === false"
+                              class="inline-flex items-center gap-1 text-primary font-medium">
+                            <span class="size-1.5 rounded-full bg-primary animate-pulse"></span>
+                            live
+                        </span>
+                        <span v-else>{{ request.duration?.toFixed(0) }}ms</span>
                     </TableCell>
                 </TableRow>
 

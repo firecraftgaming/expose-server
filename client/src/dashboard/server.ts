@@ -121,20 +121,18 @@ export async function startDashboard(preferredPort: number, tunnel: TunnelInfo):
     ws.on('close', () => clients.delete(ws));
   });
 
-  const pushListEntry = (log: ExposeLog) => {
-    const msg = JSON.stringify(logStore.toListEntry(log));
+  const broadcast = (msg: object) => {
+    const data = JSON.stringify(msg);
     for (const ws of clients) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+      if (ws.readyState === WebSocket.OPEN) ws.send(data);
     }
   };
 
-  logStore.on('log', pushListEntry);
-  logStore.on('clear', () => {
-    const msg = JSON.stringify({ clear: true });
-    for (const ws of clients) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-    }
-  });
+  // 'log' fires on request start and completion (list-row upsert); 'update' fires on
+  // every in-flight request/response chunk (live detail refresh for the open log).
+  logStore.on('log', (log: ExposeLog) => broadcast({ type: 'list', entry: logStore.toListEntry(log) }));
+  logStore.on('update', (log: ExposeLog) => broadcast({ type: 'detail', log }));
+  logStore.on('clear', () => broadcast({ type: 'clear' }));
 
   dashboardPort = await listenOnFreePort(server, preferredPort);
   return dashboardPort;

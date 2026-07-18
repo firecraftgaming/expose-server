@@ -34,6 +34,7 @@ declare interface RequestData {
         subdomain: string;
         request: RequestData;
         response: ResponseData;
+        complete?: boolean;
     }
 
     declare interface ListEntry {
@@ -42,7 +43,8 @@ declare interface RequestData {
         request_method: string;
         request_uri: string;
         plugin_data: PluginData;
-        status_code: number;
+        status_code: number | null;
+        complete?: boolean;
     }
 
   interface InternalDashboardPageData {
